@@ -12,10 +12,10 @@ Regla "evidence mindset":
 
 /*
 REPORTE 1: Top 7 categorias por monto de ventas
-Qué devuelve: Las 7 categorias con mayor total de ventas (suma de subtotal).
+Qué devuelve: Las 7 categorias con mayor total de ventas (suma de los subtotales).
 Grain (una fila representa): Una categoria.
 Métrica(s): SUM(orden_detalles.subtotal)
-Por qué GROUP BY / HAVING / subconsulta: GROUP BY para sumar ventas por categoria.
+Por qué GROUP BY: para sumar las ventas por categoria.
 */
 
 -- QUERY
@@ -26,6 +26,8 @@ SELECT
 FROM categorias c
 JOIN productos p ON p.categoria_id = c.id
 JOIN orden_detalles od ON od.producto_id = p.id
+JOIN ordenes o ON od.orden_id = o.id  
+WHERE o.status IN ('pagado', 'enviado' 'entregado') 
 GROUP BY c.id, c.nombre
 ORDER BY total_ventas DESC
 LIMIT 7;
