@@ -106,15 +106,16 @@ WHERE usuario_id = 5
   AND status IN ('pagado', 'entregado')
 GROUP BY usuario_id;
 
+-- REPORTE 3: Usuarios Inactivos (LEFT JOIN)
 /*
-REPORTE 3: Usuarios inactivos en los ultimos 60 dias
-Qué devuelve: Usuarios sin ordenes en los ultimos 60 dias.
-Grain (una fila representa): Un usuario.
-Métrica(s): No aplica (listado de usuarios).
-Por qué GROUP BY / HAVING / subconsulta: Se usa LEFT JOIN + IS NULL para detectar ausencia en ventana.
+GRAIN: Una fila representa un Usuario que no ha tenido actividad de compra.
+MÉTRICA: No aplica métrica numérica, es un listado de exclusión.
+JUSTIFICACIÓN:
+ - Se usa LEFT JOIN filtrando por fecha (últimos 60 días) en el ON.
+ - Se usa WHERE o.id IS NULL para filtrar solo aquellos donde el JOIN falló (no hubo compra).
 */
 
--- QUERY
+-- 1. QUERY PRINCIPAL
 SELECT
   u.id AS usuario_id,
   u.nombre AS usuario_nombre,
@@ -126,39 +127,22 @@ LEFT JOIN ordenes o
 WHERE o.id IS NULL
 ORDER BY u.id;
 
--- VERIFY: Conteo total de inactivos.
-SELECT COUNT(*) AS filas
-FROM (
-  SELECT u.id
-  FROM usuarios u
-  LEFT JOIN ordenes o
-    ON o.usuario_id = u.id
-    AND o.created_at >= CURRENT_DATE - INTERVAL '60 days'
-  WHERE o.id IS NULL
-) t;
+-- 2. VERIFY (Evidence Mindset)
+-- Tomamos al primer usuario que salió en la lista de inactivos (LIMIT 1)
+-- y contamos manualmente cuántas órdenes tiene en los últimos 60 días.
+-- El resultado DEBE ser 0 y la validación debe decir "CORRECTO".
 
--- VERIFY: Caso puntual con ordenes en ventana y total historico.
 WITH inactivos AS (
-  SELECT u.id AS usuario_id
+  SELECT u.id 
   FROM usuarios u
-  LEFT JOIN ordenes o
-    ON o.usuario_id = u.id
-    AND o.created_at >= CURRENT_DATE - INTERVAL '60 days'
+  LEFT JOIN ordenes o ON o.usuario_id = u.id AND o.created_at >= CURRENT_DATE - INTERVAL '60 days'
   WHERE o.id IS NULL
-  ORDER BY u.id
   LIMIT 1
 )
-SELECT
-  i.usuario_id,
-  (
-    SELECT COUNT(*)
-    FROM ordenes o
-    WHERE o.usuario_id = i.usuario_id
-      AND o.created_at >= CURRENT_DATE - INTERVAL '60 days'
-  ) AS ordenes_en_ventana,
-  (
-    SELECT COUNT(*)
-    FROM ordenes o
-    WHERE o.usuario_id = i.usuario_id
-  ) AS ordenes_total
-FROM inactivos i;
+SELECT 
+    i.id as usuario_id_verificado,
+    COUNT(o.id) as ordenes_encontradas_ultimos_60_dias,
+    CASE WHEN COUNT(o.id) = 0 THEN 'CORRECTO: Es inactivo' ELSE 'ERROR: Tiene órdenes' END as validacion
+FROM inactivos i
+LEFT JOIN ordenes o ON o.usuario_id = i.id AND o.created_at >= CURRENT_DATE - INTERVAL '60 days'
+GROUP BY i.id;
