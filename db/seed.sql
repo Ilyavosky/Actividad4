@@ -1,8 +1,8 @@
 -- ============================================
 -- SEED.SQL - Datos Iniciales
 -- ============================================
--- Equipo: [Nombre del equipo]
--- Fecha: [Fecha]
+-- Equipo: Equipo E
+-- Fecha: 21/01/2026
 -- ============================================
 -- ORDEN DE INSERCIÓN:
 -- 1. Catálogos (sin dependencias)

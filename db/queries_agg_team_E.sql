@@ -62,56 +62,49 @@ JOIN orden_detalles od ON od.producto_id = p.id
 GROUP BY t.categoria_id, t.total_ventas;
 
 /*
-REPORTE 2: Usuarios frecuentes (>= 3 ordenes) con monto total
-Qué devuelve: Usuarios con al menos 3 ordenes y su monto total acumulado.
-Grain (una fila representa): Un usuario.
-Métrica(s): COUNT(ordenes.id), SUM(ordenes.total)
-Por qué GROUP BY / HAVING / subconsulta: GROUP BY para agregar por usuario y HAVING para filtrar el umbral.
+REPORTE 2: Clientes Top (Compras > $1000)
+Qué devuelve: Usuarios cuyo gasto histórico acumulado supera los $1000. (más de un producto en una orden)
+Grain (una fila representa): Un usuario único. (Solo existe un usuario con mas de 3 productos en una orden)
+Métrica(s): SUM(ordenes.total) para ver el valor total gastado por el cliente.
+Por qué HAVING: El filtro (> 1000) aplica sobre la SUMA total, un dato que no existe fila por fila, sino solo después de agrupar.
 */
 
 -- QUERY
-SELECT
+SELECT 
   u.id AS usuario_id,
   u.nombre AS usuario_nombre,
   u.email,
-  COUNT(o.id) AS ordenes_count,
-  SUM(o.total) AS monto_total
+  COUNT(o.id) AS total_ordenes,
+  SUM(o.total) AS gasto_historico
 FROM usuarios u
 JOIN ordenes o ON o.usuario_id = u.id
+WHERE o.status IN ('pagado', 'entregado')
 GROUP BY u.id, u.nombre, u.email
-HAVING COUNT(o.id) >= 3
-ORDER BY ordenes_count DESC, u.id;
+HAVING SUM(o.total) > 1000
+ORDER BY gasto_historico DESC;
 
--- VERIFY: Conteo de filas de usuarios frecuentes.
-SELECT COUNT(*) AS filas
+-- VERIFY: ¿Realmente gastaron más de 1000?
+-- 1. Inspección rápida (debe mostrar usuarios con gasto > 1000)
+-- Conteo de cuantos 'Top' existen (deberían ser 2: Ada y Margaret)
+SELECT COUNT(*) AS cantidad_de_tops
 FROM (
   SELECT u.id
   FROM usuarios u
   JOIN ordenes o ON o.usuario_id = u.id
+  WHERE o.status IN ('pagado', 'entregado')
   GROUP BY u.id
-  HAVING COUNT(o.id) >= 3
+  HAVING SUM(o.total) > 1000
 ) t;
 
--- VERIFY: Caso puntual con sus ordenes para verificar el conteo.
-WITH frecuentes AS (
-  SELECT u.id AS usuario_id, COUNT(o.id) AS ordenes_count
-  FROM usuarios u
-  JOIN ordenes o ON o.usuario_id = u.id
-  GROUP BY u.id
-  HAVING COUNT(o.id) >= 3
-  ORDER BY COUNT(o.id) DESC, u.id
-  LIMIT 1
-)
-SELECT
-  f.usuario_id,
-  f.ordenes_count,
-  o.id AS orden_id,
-  o.status,
-  o.created_at,
-  o.total
-FROM frecuentes f
-JOIN ordenes o ON o.usuario_id = f.usuario_id
-ORDER BY o.created_at, o.id;
+-- 2. Caso Puntual
+-- Verificamos a Margaret (ID 5) sumando manualmente el precio de sus productos.
+SELECT 
+    usuario_id, 
+    SUM(total) AS validacion_suma_manual
+FROM ordenes
+WHERE usuario_id = 5 
+  AND status IN ('pagado', 'entregado')
+GROUP BY usuario_id;
 
 /*
 REPORTE 3: Usuarios inactivos en los ultimos 60 dias
