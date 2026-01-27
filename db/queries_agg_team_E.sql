@@ -27,7 +27,7 @@ FROM categorias c
 JOIN productos p ON p.categoria_id = c.id
 JOIN orden_detalles od ON od.producto_id = p.id
 JOIN ordenes o ON od.orden_id = o.id  
-WHERE o.status IN ('pagado', 'enviado' 'entregado') 
+WHERE o.status IN ('pagado', 'enviado' 'entregado'),
 GROUP BY c.id, c.nombre
 ORDER BY total_ventas DESC
 LIMIT 7;
@@ -63,49 +63,47 @@ JOIN productos p ON p.categoria_id = t.categoria_id
 JOIN orden_detalles od ON od.producto_id = p.id
 GROUP BY t.categoria_id, t.total_ventas;
 
+-- REPORTE 2: Clientes con gasto > $500 y al menos 2 items
 /*
-REPORTE 2: Clientes Top (Compras > $1000)
-Qué devuelve: Usuarios cuyo gasto histórico acumulado supera los $1000. (más de un producto en una orden)
-Grain (una fila representa): Un usuario único. (Solo existe un usuario con mas de 3 productos en una orden)
-Métrica(s): SUM(ordenes.total) para ver el valor total gastado por el cliente.
-Por qué HAVING: El filtro (> 1000) aplica sobre la SUMA total, un dato que no existe fila por fila, sino solo después de agrupar.
+GRAIN: Una fila representa un Usuario.
+METRICAS: Gasto Histórico Total.
+USO DE GROUP BY, HAVING Y WHERE:
+  - WHERE: Filtra órdenes válidas (no canceladas).
+  - GROUP BY: Agrupa toda la actividad por usuario.
+  - HAVING: Filtra el resultado de la agrupación (Gasto > 500).
 */
 
--- QUERY
 SELECT 
-  u.id AS usuario_id,
-  u.nombre AS usuario_nombre,
-  u.email,
-  COUNT(o.id) AS total_ordenes,
-  SUM(o.total) AS gasto_historico
+    u.id,
+    u.nombre,
+    u.email,
+    COUNT(DISTINCT o.id) as ordenes_totales,
+    SUM(o.total) as gasto_historico
 FROM usuarios u
 JOIN ordenes o ON o.usuario_id = u.id
-WHERE o.status IN ('pagado', 'entregado')
+WHERE o.status <> 'cancelado'
 GROUP BY u.id, u.nombre, u.email
-HAVING SUM(o.total) > 1000
+HAVING SUM(o.total) > 500.00
 ORDER BY gasto_historico DESC;
 
--- VERIFY: ¿Realmente gastaron más de 1000?
--- 1. Inspección rápida (debe mostrar usuarios con gasto > 1000)
--- Conteo de cuantos 'Top' existen (deberían ser 2: Ada y Margaret)
-SELECT COUNT(*) AS cantidad_de_tops
-FROM (
-  SELECT u.id
-  FROM usuarios u
-  JOIN ordenes o ON o.usuario_id = u.id
-  WHERE o.status IN ('pagado', 'entregado')
-  GROUP BY u.id
-  HAVING SUM(o.total) > 1000
+-- Verify 1: Check de Totales
+SELECT COUNT(*) as cantidad_big_spenders FROM (
+    SELECT u.id 
+    FROM usuarios u 
+    JOIN ordenes o ON o.usuario_id = u.id 
+    WHERE o.status <> 'cancelado' 
+    GROUP BY u.id 
+    HAVING SUM(o.total) > 500
 ) t;
 
--- 2. Caso Puntual
--- Verificamos a Margaret (ID 5) sumando manualmente el precio de sus productos.
+-- Verify 2 Usuario Margaret - ID 5
+-- Verificamos si la suma de sus órdenes en la tabla 'ordenes' coincide con el reporte.
 SELECT 
     usuario_id, 
-    SUM(total) AS validacion_suma_manual
+    SUM(total) as suma_tabla_ordenes,
+    'Debe coincidir con reporte' as validacion
 FROM ordenes
-WHERE usuario_id = 5 
-  AND status IN ('pagado', 'entregado')
+WHERE usuario_id = 5 AND status <> 'cancelado'
 GROUP BY usuario_id;
 
 -- REPORTE 3: Usuarios Inactivos (LEFT JOIN)
